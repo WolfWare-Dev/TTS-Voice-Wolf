@@ -1,11 +1,10 @@
 ﻿using OSCVRCWiz.Services.Integrations;
 using OSCVRCWiz.Services.Text;
+using System.Text.Json.Nodes;
 using System.Windows.Shapes;
 
-namespace OSCVRCWiz.Services.Speech.TextToSpeech
-{
-    public class TTSMessageQueue
-    {
+namespace OSCVRCWiz.Services.Speech.TextToSpeech {
+    public class TTSMessageQueue {
         public static Queue<TTSMessage> queueTTS = new Queue<TTSMessage>();
         public static bool isTTSPlaying = false;
         public struct TTSMessage //use then when setting up presets
@@ -72,7 +71,24 @@ namespace OSCVRCWiz.Services.Speech.TextToSpeech
 
         }
 
-        public static void QueueMessage(string text, string STTMode, string AzureTranslate = "[ERROR]",bool chatboxOverride = false, bool useChatbox = true, bool useKAT = true)
+        public static void QueueJSONMessage(string message, string STTMode = "Web App")
+        {
+            OutputText.outputLog(message);
+            JsonNode? node = JsonNode.Parse(message);
+
+            if (node is JsonObject jsonObject)
+            {
+                // Now you can use jsonObject safely
+                string text = jsonObject["message"].GetValue<string>();
+                QueueMessage(text, STTMode, "[ERROR]", false, true, true, jsonObject);
+            } else
+            {
+                Console.WriteLine("The JSON is not an object.");
+            }
+
+
+        }
+        public static void QueueMessage(string text, string STTMode, string AzureTranslate = "[ERROR]", bool chatboxOverride = false, bool useChatbox = true, bool useKAT = true, JsonObject json_message = null)
         {
             try
             {
@@ -99,8 +115,7 @@ namespace OSCVRCWiz.Services.Speech.TextToSpeech
                             firstString = inputText.Substring(0, maxLength);
                             secondString = inputText.Substring(maxLength + 1);
                             text = firstString;
-                        }
-                        else
+                        } else
                         {
                             int index = maxLength;
                             while (index >= 0 && !char.IsWhiteSpace(inputText[index]))
@@ -123,21 +138,21 @@ namespace OSCVRCWiz.Services.Speech.TextToSpeech
                 VoiceWizardWindow.MainFormGlobal.Invoke((MethodInvoker)delegate ()
                 {
                     TTSMessageQueued.text = text;
-                    if(STTMode == "OSCListener-NoTTS") 
+                    if (STTMode == "OSCListener-NoTTS")
                     {
                         TTSMessageQueued.TTSMode = "No TTS";
-                    }
-                    else
+                    } else
                     {
                         TTSMessageQueued.TTSMode = VoiceWizardWindow.MainFormGlobal.comboBoxTTSMode.Text.ToString();
                     }
-                   
-                    TTSMessageQueued.Voice = VoiceWizardWindow.MainFormGlobal.comboBoxVoiceSelect.Text.ToString();
-                    TTSMessageQueued.Accent = VoiceWizardWindow.MainFormGlobal.comboBoxAccentSelect.Text.ToString();
-                    TTSMessageQueued.Style = VoiceWizardWindow.MainFormGlobal.comboBoxStyleSelect.Text.ToString();
-                    TTSMessageQueued.Pitch = VoiceWizardWindow.MainFormGlobal.trackBarPitch.Value;
-                    TTSMessageQueued.Speed = VoiceWizardWindow.MainFormGlobal.trackBarSpeed.Value;
-                    TTSMessageQueued.Volume = VoiceWizardWindow.MainFormGlobal.trackBarVolume.Value;
+
+                    TTSMessageQueued.Voice = GetJsonOrDefault(json_message, "voice", VoiceWizardWindow.MainFormGlobal.comboBoxVoiceSelect.Text.ToString());
+                    TTSMessageQueued.Accent = GetJsonOrDefault(json_message, "accent", VoiceWizardWindow.MainFormGlobal.comboBoxAccentSelect.Text.ToString());
+                    TTSMessageQueued.Style = GetJsonOrDefault(json_message, "style", VoiceWizardWindow.MainFormGlobal.comboBoxStyleSelect.Text.ToString());
+                    TTSMessageQueued.Pitch = GetJsonOrDefault(json_message, "pitch", VoiceWizardWindow.MainFormGlobal.trackBarPitch.Value);
+                    TTSMessageQueued.Speed = GetJsonOrDefault(json_message, "speed", VoiceWizardWindow.MainFormGlobal.trackBarSpeed.Value);
+                    TTSMessageQueued.Volume = GetJsonOrDefault(json_message, "volume", VoiceWizardWindow.MainFormGlobal.trackBarVolume.Value);
+
                     TTSMessageQueued.SpokenLang = VoiceWizardWindow.MainFormGlobal.comboBoxSpokenLanguage.Text.ToString();
                     TTSMessageQueued.TranslateLang = VoiceWizardWindow.MainFormGlobal.comboBoxTranslationLanguage.Text.ToString();
                     TTSMessageQueued.STTMode = STTMode;
@@ -154,21 +169,18 @@ namespace OSCVRCWiz.Services.Speech.TextToSpeech
                     if (VoiceWizardWindow.MainFormGlobal.rjToggleButtonQueueSystem.Checked == true && VoiceWizardWindow.MainFormGlobal.rjToggleButtonQueueTypedText.Checked == true)
                     {
                         TTSMessageQueue.Enqueue(TTSMessageQueued);
-                    }
-                    else
+                    } else
                     {
                         Task.Run(() => DoSpeech.MainDoTTS(TTSMessageQueued));
                     }
 
-                }
-                else
+                } else
                 {
                     if (VoiceWizardWindow.MainFormGlobal.rjToggleButtonQueueSystem.Checked == true)
                     {
 
                         TTSMessageQueue.Enqueue(TTSMessageQueued);
-                    }
-                    else
+                    } else
                     {
                         Task.Run(() => DoSpeech.MainDoTTS(TTSMessageQueued));
                     }
@@ -193,6 +205,15 @@ namespace OSCVRCWiz.Services.Speech.TextToSpeech
 
         }
 
+        private static int GetJsonOrDefault(JsonObject json, string key, int defaultValue)
+        {
+            return json != null && json[key] != null ? json[key].GetValue<int>() : defaultValue;
+        }
+
+        private static string GetJsonOrDefault(JsonObject json, string key, string defaultValue)
+        {
+            return json != null && json[key] != null ? json[key].GetValue<string>() : defaultValue;
+        }
 
 
 

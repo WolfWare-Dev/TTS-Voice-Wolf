@@ -3,11 +3,10 @@ using OSCVRCWiz.Services.Text;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json.Nodes; // Add this at the top if not present
 
-namespace OSCVRCWiz.Services.Speech.Speech_Recognition
-{
-    public class WebSocketServer
-    {
+namespace OSCVRCWiz.Services.Speech.Speech_Recognition {
+    public class WebSocketServer {
 
         private static HttpListener httpListener;
         private static CancellationTokenSource cancellationTokenSource;
@@ -17,30 +16,30 @@ namespace OSCVRCWiz.Services.Speech.Speech_Recognition
 
         public static void StartServer()
         {
-           
-                cancellationTokenSource = new CancellationTokenSource();
-                httpListener = new HttpListener();
-                httpListener.Prefixes.Add($"http://localhost:{WebSocketServerPort}/"); // Adjust the URL as needed
-                httpListener.Start();
-                SocketServerEnabled = true;
-                OutputText.outputLog($"WebSocket Server Listening ({WebSocketServerPort})");
 
-                // Run the server in a separate task
-                Task.Run(() => StartListeningAsync(cancellationTokenSource.Token));
-            
+            cancellationTokenSource = new CancellationTokenSource();
+            httpListener = new HttpListener();
+            httpListener.Prefixes.Add($"http://+:{WebSocketServerPort}/"); // Adjust the URL as needed
+            httpListener.Start();
+            SocketServerEnabled = true;
+            OutputText.outputLog($"WebSocket Server Listening ({WebSocketServerPort})");
+
+            // Run the server in a separate task
+            Task.Run(() => StartListeningAsync(cancellationTokenSource.Token));
+
         }
 
         public static void StopServer()
         {
-           
-                if (cancellationTokenSource != null)
-                {
-                    cancellationTokenSource.Cancel();
-                    httpListener.Close();
-                    SocketServerEnabled = false;
-                    OutputText.outputLog("WebSocket server stopped.");
-                }
-            
+
+            if (cancellationTokenSource != null)
+            {
+                cancellationTokenSource.Cancel();
+                httpListener.Close();
+                SocketServerEnabled = false;
+                OutputText.outputLog("WebSocket server stopped.");
+            }
+
         }
         public static void ToggleServer()
         {
@@ -49,31 +48,30 @@ namespace OSCVRCWiz.Services.Speech.Speech_Recognition
                 if (SocketServerEnabled == false)
                 {
                     StartServer();
-                }
-                else
+                } else
                 {
                     StopServer();
                 }
             }
-            catch(System.Exception ex) 
+            catch (System.Exception ex)
             {
                 OutputText.outputLog("WebSocket Server Error: " + ex.Message, Color.Red);
             }
-        
+
 
         }
         public static void ActivateOnStartUp()
         {
-            if(VoiceWizardWindow.MainFormGlobal.rjToggleActivateWebsocketOnStart.Checked)
+            if (VoiceWizardWindow.MainFormGlobal.rjToggleActivateWebsocketOnStart.Checked)
             {
                 ToggleServer();
             }
         }
 
 
-            private static async Task StartListeningAsync(CancellationToken cancellationToken)
+        private static async Task StartListeningAsync(CancellationToken cancellationToken)
         {
-           
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
@@ -85,8 +83,7 @@ namespace OSCVRCWiz.Services.Speech.Speech_Recognition
                         WebSocket webSocket = webSocketContext.WebSocket;
 
                         await HandleWebSocketConnection(webSocket);
-                    }
-                    else
+                    } else
                     {
                         context.Response.StatusCode = 400;
                         context.Response.Close();
@@ -94,7 +91,7 @@ namespace OSCVRCWiz.Services.Speech.Speech_Recognition
                 }
                 catch (HttpListenerException ex)
                 {
-                    OutputText.outputLog("WebSocket: "+ ex.Message, Color.Orange);
+                    OutputText.outputLog("WebSocket: " + ex.Message, Color.Orange);
                 }
             }
         }
@@ -114,26 +111,37 @@ namespace OSCVRCWiz.Services.Speech.Speech_Recognition
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
                         string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        // OutputText.outputLog($"Received message from client: {message}");
-                        TTSMessageQueue.QueueMessage(message, "Web App");
 
-                        // Handle the OSC message here, e.g., broadcast it to other clients
-                    }
-                    else
+                        // Try to parse as JSON
+                        try
+                        {
+                            JsonNode? node = JsonNode.Parse(message);
+                            if (node != null)
+                            {
+                                TTSMessageQueue.QueueJSONMessage(message);
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            // Not valid JSON, optionally handle as plain text or ignore
+                            OutputText.outputLog("Received non-JSON text message via WebSocket.");
+                            TTSMessageQueue.QueueMessage(message, "Web App");
+                        }
+                    } else
                     {
-                        OutputText.outputLog($"Received message: "+ result.MessageType.ToString());
+                        OutputText.outputLog($"Received message: " + result.MessageType.ToString());
                     }
                 }
-                catch ( System.Exception ex )
+                catch (System.Exception ex)
                 {
-                    OutputText.outputLog("Websocket exception: "+ ex.Message);
+                    OutputText.outputLog("Websocket exception: " + ex.Message);
                     try
                     {
-                       OutputText.outputLog("Websocket exception inner: " + ex.InnerException.Message);
+                        OutputText.outputLog("Websocket exception inner: " + ex.InnerException.Message);
                     }
                     catch { }
                 }
-                
+
             }
         }
     }
